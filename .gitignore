@@ -1,0 +1,9 @@
+secrets.auto.tfvars
+globals.auto.tfvars
+backend.tf
+dependencies.tf
+unseal.json
+vault.auto.tfvars
+azure.json
+.terraform*
+terraform.tfstate*

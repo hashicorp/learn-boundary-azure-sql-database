@@ -1,0 +1,198 @@
+#!/bin/bash
+
+## Common functions to set Boundary, Vault, and database
+## environment variables
+function set_boundary() {
+  export BOUNDARY_ADDR=$(cd terraform/infrastructure && terraform output -raw boundary_url)
+  export BOUNDARY_TLS_INSECURE=true
+}
+
+function set_database() {
+  export DATABASE_URL=$(cd terraform/infrastructure && terraform output -raw mssql_url)
+}
+
+function set_vault() {
+  export VAULT_ADDR=$(cd terraform/infrastructure && terraform output -raw vault_url)
+  export VAULT_TOKEN=$(cat terraform/infrastructure/unseal.json | jq -r '.root_token')
+}
+
+function delete_users() {
+  az ad user delete --id $(cd terraform/infrastructure && terraform output -raw azuread_user_database_object_id)
+  az ad user delete --id $(cd terraform/infrastructure && terraform output -raw azuread_user_developer_object_id)
+}
+
+function cleanup() {
+  set_vault
+  vault lease revoke -f -prefix expense/database/mssql
+
+  pushd terraform/vault || exit 1
+  terraform destroy -auto-approve
+  popd || exit 1
+
+  pushd terraform/boundary || exit 1
+  terraform destroy -auto-approve
+  popd || exit 1
+
+  delete_users
+
+  pushd terraform/infrastructure || exit 1
+  terraform destroy -auto-approve
+  popd || exit 1
+
+  pushd bootstrap || exit 1
+  terraform destroy -auto-approve
+  rm terraform.tfstate*
+  popd || exit 1
+
+  rm -rf terraform/infrastructure/unseal.json \
+      azure.json \
+      terraform/infrastructure/.terraform \
+      terraform/boundary/.terraform \
+      terraform/vault/.terraform
+
+  exit 0
+}
+trap cleanup SIGINT
+
+function init_tfc() {
+  pushd bootstrap || exit 1
+  terraform init
+  terraform apply -auto-approve
+  popd || exit 1
+}
+
+function init_infrastructure() {
+  pushd terraform/infrastructure || exit 1
+  terraform init
+  terraform apply -auto-approve
+  popd || exit 1
+}
+
+function unseal_vault() {
+  pushd terraform/infrastructure || exit 1
+  az ad app permission grant --id $(terraform output -raw boundary_oidc_application_id)  --api 00000003-0000-0000-c000-000000000000
+  export VAULT_ADDR=$(terraform output -raw vault_url)
+  if ! test -f "unseal.json"; then
+    vault operator init -key-shares=1 -key-threshold=1 -format=json > unseal.json
+    vault operator unseal $(cat unseal.json | jq -r '.unseal_keys_hex[0]')
+  fi
+  export VAULT_TOKEN=$(cat unseal.json | jq -r '.root_token')
+  cat <<EOF > ../../bootstrap/vault.auto.tfvars
+vault_token = "${VAULT_TOKEN}"
+EOF
+  popd || exit 1
+}
+
+function init_boundary() {
+  pushd terraform/boundary || exit 1
+  terraform init
+  terraform apply -auto-approve
+  popd || exit 1
+}
+
+function init_vault() {
+  pushd terraform/vault || exit 1
+  terraform init
+  terraform apply -auto-approve
+  popd || exit 1
+}
+
+function login() {
+  set_boundary
+  export BOUNDARY_AUTH_METHOD_ID=$(cd terraform/boundary && terraform output -raw azuread_auth_method_id)
+  boundary authenticate oidc -auth-method-id=${BOUNDARY_AUTH_METHOD_ID}
+}
+
+function admin_proxy() {
+  set_boundary
+  set_database
+  export BOUNDARY_DB_ADMIN_TARGET_ID=$(cd terraform/boundary && terraform output -raw database_admin_target_id)
+  if ! grep -Fq "${DATABASE_URL}" /etc/hosts
+  then
+    sudo /bin/sh -c 'echo "127.0.0.1 '${DATABASE_URL}'" >> /etc/hosts'
+  fi
+  boundary connect -target-id ${BOUNDARY_DB_ADMIN_TARGET_ID} -listen-port 1433
+}
+
+function dev_proxy() {
+  set_boundary
+  set_database
+  export BOUNDARY_DB_DEV_TARGET_ID=$(cd terraform/vault && terraform output -raw developer_target_id)
+  if ! grep -Fq "${DATABASE_URL}" /etc/hosts
+  then
+    sudo /bin/sh -c 'echo "127.0.0.1 '${DATABASE_URL}'" >> /etc/hosts'
+  fi
+  boundary connect -target-id ${BOUNDARY_DB_DEV_TARGET_ID} -listen-port 1433
+}
+
+function admin_login() {
+  set_database
+  export SQLCMDUSER=$(cd terraform/infrastructure && terraform output -raw azuread_user_database_username)
+  export SQLCMDPASSWORD=$(cd terraform/infrastructure && terraform output -raw azuread_user_database_admin_password)
+}
+
+function admin_connect() {
+  admin_login
+  sqlcmd -S ${DATABASE_URL} -C -G -d DemoExpenses
+}
+
+function import_data() {
+  admin_login
+  sqlcmd -S ${DATABASE_URL} -C -G -d DemoExpenses -i database/setup.sql
+}
+
+function dev_login() {
+  set_database
+}
+
+function dev_connect() {
+  dev_login
+  sqlcmd -S ${DATABASE_URL} -C -d DemoExpenses
+}
+
+for arg in "$@"
+do
+    case $arg in
+        all)
+        init_tfc
+        init_infrastructure
+        unseal_vault
+        init_tfc
+        init_boundary
+        init_vault
+        shift
+        ;;
+        login)
+        login
+        shift
+        ;;
+        admin_proxy)
+        admin_proxy
+        shift
+        ;;
+        dba)
+        admin_connect
+        shift
+        ;;
+        data)
+        import_data
+        shift
+        ;;
+        dev_proxy)
+        dev_proxy
+        shift
+        ;;
+        dev)
+        dev_connect
+        shift
+        ;;
+        cleanup)
+        cleanup
+        shift
+        ;;
+        *)
+        echo "cmd not found: try 'all', 'login', or 'cleanup'"
+        shift
+        ;;
+    esac
+done
