@@ -23,8 +23,13 @@ locals {
   vault_subnet_id      = module.vnet.vnet_subnets[3]
 }
 
+resource "time_sleep" "wait" {
+  depends_on      = [module.vnet]
+  create_duration = "30s"
+}
+
 module "install" {
-  depends_on           = [azurerm_resource_group.resources]
+  depends_on           = [time_sleep.wait, azurerm_resource_group.resources, module.vnet]
   source               = "joatmon08/boundary/azurerm"
   version              = "0.0.1"
   resource_group_name  = azurerm_resource_group.resources.name
