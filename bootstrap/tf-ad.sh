@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 
 ## Add API permissions for Microsoft Graph API
 az ad app permission add --id ${AZURERM_CLIENT_ID} --api 00000003-0000-0000-c000-000000000000 --api-permissions 5f8c59db-677d-491f-a6b8-5f174b11ec1d=Scope

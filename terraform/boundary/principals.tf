@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 ## Set up Azure AD groups for operators to log in
 resource "boundary_managed_group" "developer" {
   auth_method_id = boundary_auth_method_oidc.azuread.id

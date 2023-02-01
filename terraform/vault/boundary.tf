@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 resource "boundary_credential_store_vault" "vault" {
   name            = "vault"
   description     = "Vault credentials store"

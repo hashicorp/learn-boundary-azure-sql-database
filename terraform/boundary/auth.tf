@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 locals {
   url                    = data.terraform_remote_state.infrastructure.outputs.boundary_url
   oidc_service_principal = data.terraform_remote_state.infrastructure.outputs.boundary_oidc_azure_ad

@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 resource "local_file" "globals" {
   for_each = local.workspaces
   content  = <<EOT

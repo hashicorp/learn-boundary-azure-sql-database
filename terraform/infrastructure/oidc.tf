@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 resource "azuread_application" "oidc" {
   display_name = "${azurerm_resource_group.resources.name}-boundary-oidc-auth"
   owners       = [data.azuread_client_config.current.object_id]
