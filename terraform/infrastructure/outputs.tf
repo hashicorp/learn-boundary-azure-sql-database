@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 ## Boundary exports to set up dynamic host catalog ##
 
 output "subscription_id" {

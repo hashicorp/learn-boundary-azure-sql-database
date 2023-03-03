@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 output "azuread_auth_method_id" {
   value       = boundary_auth_method_oidc.azuread.id
   description = "Azure AD auth method ID"

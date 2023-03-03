@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 locals {
   boundary_creds_path = "${vault_mount.mssql.path}/creds/${vault_database_secret_backend_role.application.name}"
 }
